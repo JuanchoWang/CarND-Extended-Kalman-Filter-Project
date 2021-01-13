@@ -42,26 +42,12 @@ FusionEKF::FusionEKF() {
              0, 0, 1000, 0,
              0, 0, 0, 1000;
   
-  ekf_.F_ = MatrixXd(4, 4);  // F will be reset when dt is available
-  ekf_.F_ << 1, 0, 1, 0,
-             0, 1, 0, 1,
-             0, 0, 1, 0,
-             0, 0, 0, 1;
-  
-  ekf_.Q_ = MatrixXd(4, 4);  // Q will also be reset after the first measurement
-  ekf_.Q_ << 1, 0, 1, 0,
-             0, 1, 0, 1,
-             1, 0, 1, 0,
-             0, 1, 0, 1;
+  ekf_.F_ = MatrixXd(4, 4);  // F will be determined when dt is available
+  ekf_.Q_ = MatrixXd(4, 4);  // Q also
   
   // linear function for laser measurement
   H_laser_ << 1, 0, 0, 0,
               0, 1, 0, 0;
-  
-  // non-linear function for radar measurement but here linearized with Taylor Multi-variant Expansion
-  Hj_ << 1/sqrt(2), 1/sqrt(2), 0, 0,
-         -0.5, 0.5, 0, 0,
-         0, 0, 1/sqrt(2), 1/sqrt(2);
 
 }
 
@@ -92,8 +78,8 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
       //         and initialize state.
       ekf_.x_ << measurement_pack.raw_measurements_[0] * cos(measurement_pack.raw_measurements_[1]),
                  measurement_pack.raw_measurements_[0] * sin(measurement_pack.raw_measurements_[1]),
-                 0,  // Keep velocity 0 for now
-                 0;
+                 measurement_pack.raw_measurements_[2] * cos(measurement_pack.raw_measurements_[1]), // only axial velocity here
+                 measurement_pack.raw_measurements_[2] * sin(measurement_pack.raw_measurements_[1]);
 
     }
     else if (measurement_pack.sensor_type_ == MeasurementPackage::LASER) {
@@ -149,6 +135,7 @@ void FusionEKF::ProcessMeasurement(const MeasurementPackage &measurement_pack) {
 
   if (measurement_pack.sensor_type_ == MeasurementPackage::RADAR) {
     // TODO: Radar updates
+    Hj_ = tools.CalculateJacobian(ekf_.x_);
     ekf_.Init(ekf_.x_, ekf_.P_, ekf_.F_, Hj_, R_radar_, ekf_.Q_);
     ekf_.UpdateEKF(measurement_pack.raw_measurements_);
   } else {
